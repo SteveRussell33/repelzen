@@ -24,6 +24,10 @@ struct Werner : Module {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
         configParam(Werner::TIME_PARAM, 0.0, 1.0, 0.0, "pulse width");
         configParam(Werner::DELTA_PARAM, 0.0, 1.0, 0.0, "sensitivity");
+        for (int i = 0; i < NUM_CHANNELS; i++) {
+            configInput(CV_INPUT + i, string::f("cv %i", i + 1));
+            configOutput(GATE_OUTPUT + i, string::f("gate %i", i + 1));
+        }
     }
 
     void process(const ProcessArgs &args) override;
@@ -63,7 +67,7 @@ struct WernerWidget : ModuleWidget {
     WernerWidget(Werner *module) {
     	setModule(module);
         box.size = Vec(4 * RACK_GRID_WIDTH, RACK_GRID_HEIGHT);
-        setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/reface/retrig_bg.svg")));
+        setPanel(createPanel(asset::plugin(pluginInstance, "res/reface/retrig_bg.svg")));
 
         addParam(createParam<ReKnobLGrey>(Vec(9, 40), module, Werner::TIME_PARAM));
         addParam(createParam<ReKnobMGrey>(Vec(15.5, 106), module, Werner::DELTA_PARAM));

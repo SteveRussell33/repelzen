@@ -34,7 +34,10 @@ struct Folder : Module {
         configParam(Folder::GAIN_ATT_PARAM, -1.0, 1.0, 0, "folding amount modulation");
         configParam(Folder::SYM_PARAM, -1.0, 1.0, 0.0, "symmetry");
         configParam(Folder::SYM_ATT_PARAM, -1.0, 1.0, 0.0, "symmetry modulation");
-
+        configInput(GAIN_INPUT, "folding amount modulation");
+        configInput(SYM_INPUT, "symmetry modulation");
+        configInput(GATE_INPUT, "signal");
+        configOutput(GATE_OUTPUT, "signal");
         /* SampleRateConverter needs integer value, #6 */
         int sr = APP->engine->getSampleRate();
         convUp.setRates(sr, sr * 4);
@@ -144,7 +147,7 @@ struct FolderWidget : ModuleWidget {
     FolderWidget(Folder *module){
         setModule(module);
         box.size = Vec(4 * RACK_GRID_WIDTH, RACK_GRID_HEIGHT);
-        setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/reface/refold_bg.svg")));
+        setPanel(createPanel(asset::plugin(pluginInstance, "res/reface/refold_bg.svg")));
 
         addParam(createParam<ReSwitch3>(Vec(15, 176), module, Folder::STAGE_PARAM));
         addParam(createParam<ReKnobLGrey>(Vec(9, 40), module, Folder::GAIN_PARAM));
@@ -158,26 +161,12 @@ struct FolderWidget : ModuleWidget {
         addOutput(createOutput<ReIOPort>(Vec(33.5, 325.5), module, Folder::GATE_OUTPUT));
     }
 
-    struct FolderMenuItem : MenuItem {
-        Folder *module;
-        void onAction(const event::Action &e) override {
-        	module->alternativeMode ^= true;
-        }
-    };
-
     void appendContextMenu(Menu *menu) override {
         Folder *module = dynamic_cast<Folder*>(this->module);
         assert(module);
-
         menu->addChild(new MenuSeparator());
-
-        FolderMenuItem *altItem = createMenuItem<FolderMenuItem>(
-            "Alternative folding algorithm", CHECKMARK(module->alternativeMode)
-        );
-        altItem->module = module;
-        menu->addChild(altItem);
+        menu->addChild(createBoolPtrMenuItem("Alternative folding algorithm", "", &module->alternativeMode));
     }
-
 };
 
 Model *modelFolder = createModel<Folder, FolderWidget>("refold");

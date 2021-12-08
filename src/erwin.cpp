@@ -41,9 +41,16 @@ struct Erwin : Module {
         configParam(Erwin::CHANNEL_TRANSPOSE_PARAM + 2, -4, 4, 0, "octave");
         configParam(Erwin::CHANNEL_TRANSPOSE_PARAM + 3, -4, 4, 0, "octave");
         configParam(Erwin::SELECT_PARAM, 0, 15, 0, "scene", "", 0, 1, 1);
-        for(int i=0; i<12; i++) {
-            configParam(Erwin::NOTE_PARAM + i, 0.0, 1.0, 0.0, "enable note");
+        for (int i = 0; i < 12; i++) {
+            configParam(Erwin::NOTE_PARAM + i, 0.0, 1.0, 0.0, "enable/disable note");
         }
+        for (int i = 0; i < 4; i++) {
+            configInput(IN_INPUT + i, string::f("channel %i", i + 1));
+            configOutput(OUT_OUTPUT + i, string::f("channel %i", i + 1));
+        }
+        configInput(SELECT_INPUT, "scene selection");
+        configInput(TRANSPOSE_INPUT, "transposition");
+        configInput(SEMI_INPUT, "semi");
         onReset();
     }
 
@@ -176,7 +183,7 @@ struct ErwinWidget : ModuleWidget {
     ErwinWidget(Erwin *module) {
         setModule(module);
         box.size = Vec(8 * RACK_GRID_WIDTH, RACK_GRID_HEIGHT);
-        setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/reface/rewin_bg.svg")));
+        setPanel(createPanel(asset::plugin(pluginInstance, "res/reface/rewin_bg.svg")));
 
         /* "scenes" */
         addParam(createParam<ReSnapKnobLGrey>(Vec(39, 40), module, Erwin::SELECT_PARAM));

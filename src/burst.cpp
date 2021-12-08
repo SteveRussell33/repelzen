@@ -87,8 +87,15 @@ struct Burst : Module
 	configParam(Burst::CV_MODE_PARAM, 0, 7, 0, "cv mode");
 	configParam(Burst::REP_ATT_PARAM, -1.0, 1.0, 0.0, "repetition modulation");
 	configParam(Burst::TIME_ATT_PARAM, -1.0, 1.0, 0.0, "time modulation");
-	configParam(Burst::GATE_MODE_PARAM, 0.0, 1.0, 0.0, "gate/trigger switch");
-  }
+	configSwitch(Burst::GATE_MODE_PARAM, 0.0, 1.0, 0.0, "gate/trigger", {"gate", "trigger"});
+
+    configInput(GATE_INPUT, "gate");
+    configInput(CLOCK_INPUT, "clock");
+    configInput(REP_INPUT, "repetition modulation");
+    configInput(TIME_INPUT, "time modulation");
+    configOutput(GATE_OUTPUT, "gate/trigger");
+    configOutput(EOC_OUTPUT, "eoc");
+    configOutput(CV_OUTPUT, "cv");  }
 };
 
 void Burst::process(const ProcessArgs &args)
@@ -208,7 +215,7 @@ struct BurstWidget : ModuleWidget {
   BurstWidget(Burst *module) {
     setModule(module);
     box.size = Vec(8 * RACK_GRID_WIDTH, RACK_GRID_HEIGHT);
-    setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/reface/reburst_bg.svg")));
+    setPanel(createPanel(asset::plugin(pluginInstance, "res/reface/reburst_bg.svg")));
 
     addParam(createParam<ReButtonL>(Vec(39, 40), module, Burst::BUTTON_PARAM));
     addInput(createInput<ReIOPort>(Vec(48, 110), module, Burst::GATE_INPUT));;
