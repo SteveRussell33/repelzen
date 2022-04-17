@@ -48,17 +48,20 @@ struct Mixer : Module {
     Mixer() {
         config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
-        for(int i=0;i<NUM_CHANNELS;i++) {
+        for (int i = 0; i < NUM_CHANNELS; i++) {
             configParam(Mixer::AUX1_PARAM + i, 0.0f, 1.0f, 0.0f, "send1 amount");
             configParam(Mixer::AUX2_PARAM + i, 0.0f, 1.0f, 0.0f, "send2 amount");
             configParam(Mixer::PAN_PARAM + i, -1.0f, 1.0f, 0.0f, "pan");
             configParam(Mixer::EQ_HIGH_PARAM + i, -15.0f, 15.0f, 0.0f, "eq high band gain", "dB");
             configParam(Mixer::EQ_MID_PARAM + i, -12.5f, 12.5f, 0.0f, "eq mid band gain", "dB");
             configParam(Mixer::EQ_LOW_PARAM + i, -20.0f, 20.0f, 0.0f, "eq low band gain", "dB");
-            configParam(Mixer::MUTE_PARAM + i, 0.0f, 1.0f, 0.0f, "mute on/off");
+            configButton(Mixer::MUTE_PARAM + i, "mute on/off");
             configParam(Mixer::GAIN_PARAM + i, -60.0f, 0.0f, -60.0f, "channel gain", "dB");
             channels[i].hp.setCutoff(35.0f, 0.8f, AeFilterType::AeHIGHPASS);
             channels[i].hs.setParams(12000.0f, 0.8f, -5.0f, AeEQType::AeHIGHSHELVE);
+            configInput(CH1_INPUT + i, string::f("audio %i", i + 1));
+            configInput(CH1_GAIN_INPUT + i, string::f("gain %i", i + 1));
+            configInput(CH1_PAN_INPUT + i, string::f("pan %i", i + 1));
         }
 
         configParam(Mixer::MASTER_GAIN_PARAM, -60.0f, 0.0f, -30.0f, "master gain", "dB");
@@ -66,6 +69,17 @@ struct Mixer : Module {
         configParam(Mixer::MASTER_EQ_MID_PARAM, -7.0f, 7.0f, 0.0f, "master eq mid band gain", "dB");
         configParam(Mixer::MASTER_EQ_LOW_PARAM, -10.0f, 10.0f, 0.0f, "master eq low band gain", "dB");
 
+        configInput(AUX1_L_INPUT, "return1 left");
+        configInput(AUX1_R_INPUT, "return1 right");
+        configInput(AUX2_L_INPUT, "return2 left");
+        configInput(AUX2_R_INPUT, "return2 right");
+        configOutput(AUX1_L_OUTPUT, "send1 left");
+        configOutput(AUX1_R_OUTPUT, "send1 right");
+        configOutput(AUX2_L_OUTPUT, "send2 left");
+        configOutput(AUX2_R_OUTPUT, "send2 right");
+        configOutput(L_OUTPUT, "left audio");
+        configOutput(R_OUTPUT, "right audio");
+        
         maHp.setCutoff(35.0f, 0.8f, AeFilterType::AeHIGHPASS);
         maHs.setParams(12000.0f, 0.8f, -2.0f, AeEQType::AeHIGHSHELVE);
 
@@ -223,7 +237,7 @@ struct MixerWidget : ModuleWidget {
     MixerWidget(Mixer *module) {
         setModule(module);
         box.size = Vec(28 * RACK_GRID_WIDTH, RACK_GRID_HEIGHT);
-        setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/reface/rexmix_bg.svg")));
+        setPanel(createPanel(asset::plugin(pluginInstance, "res/reface/rexmix_bg.svg")));
 
         for(int i=0;i<NUM_CHANNELS;i++) {
             addParam(createParam<ReKnobMGreen>(Vec(108 + i * 42, 64), module, Mixer::AUX1_PARAM + i));

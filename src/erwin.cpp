@@ -41,9 +41,16 @@ struct Erwin : Module {
         configParam(Erwin::CHANNEL_TRANSPOSE_PARAM + 2, -4, 4, 0, "octave");
         configParam(Erwin::CHANNEL_TRANSPOSE_PARAM + 3, -4, 4, 0, "octave");
         configParam(Erwin::SELECT_PARAM, 0, 15, 0, "scene", "", 0, 1, 1);
-        for(int i=0; i<12; i++) {
-            configParam(Erwin::NOTE_PARAM + i, 0.0, 1.0, 0.0, "enable note");
+        for (int i = 0; i < 12; i++) {
+            configParam(Erwin::NOTE_PARAM + i, 0.0, 1.0, 0.0, "enable/disable note");
         }
+        for (int i = 0; i < 4; i++) {
+            configInput(IN_INPUT + i, string::f("channel %i", i + 1));
+            configOutput(OUT_OUTPUT + i, string::f("channel %i", i + 1));
+        }
+        configInput(SELECT_INPUT, "scene selection");
+        configInput(TRANSPOSE_INPUT, "transposition");
+        configInput(SEMI_INPUT, "semi");
         onReset();
     }
 
@@ -176,7 +183,7 @@ struct ErwinWidget : ModuleWidget {
     ErwinWidget(Erwin *module) {
         setModule(module);
         box.size = Vec(8 * RACK_GRID_WIDTH, RACK_GRID_HEIGHT);
-        setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/reface/rewin_bg.svg")));
+        setPanel(createPanel(asset::plugin(pluginInstance, "res/reface/rewin_bg.svg")));
 
         /* "scenes" */
         addParam(createParam<ReSnapKnobLGrey>(Vec(39, 40), module, Erwin::SELECT_PARAM));
@@ -248,36 +255,65 @@ struct ErwinWidget : ModuleWidget {
         void onAction(const event::Action &e) override {
             json_t* rootJ = module->dataToJson();
             if(rootJ) {
+#ifdef USING_CARDINAL_NOT_RACK
+                async_dialog_filebrowser(true, nullptr, "Save scales", [rootJ](char* path) {
+                    pathSelected(rootJ, path);
+                });
+#else
                 char* path = osdialog_file(OSDIALOG_SAVE, NULL, "rewin.json", NULL);
-                if(path) {
-                    if (json_dump_file(rootJ, path, 0))
-                    DEBUG("Error: cannot export rewin scale file");
-                }
-                free(path);
+                pathSelected(rootJ, path);
+#endif
             }
+        }
+
+        static void pathSelected(json_t* rootJ, char* path) {
+            if(path) {
+                if (json_dump_file(rootJ, path, 0))
+                DEBUG("Error: cannot export rewin scale file");
+            }
+            free(path);
         }
     };
 
     /* Import scales */
     struct ErwinLoadItem : MenuItem {
         Erwin *module;
-        json_error_t error;
 
         void onAction(const event::Action &e) override {
+#ifdef USING_CARDINAL_NOT_RACK
+            Erwin* module = this->module;
+            async_dialog_filebrowser(false, nullptr, "Load scales", [module](char* path) {
+                pathSelected(module, path);
+            });
+#else
             char* path = osdialog_file(OSDIALOG_OPEN, NULL, NULL, NULL);
+            pathSelected(module, path);
+#endif
+        }
+
+        static void pathSelected(Erwin* module, char* path) {
             if(path) {
+                json_error_t error;
                 json_t* rootJ = json_load_file(path, 0, &error);
                 if(rootJ) {
                     // Check this here to not break compatibility with old (single scale) saves
                     json_t *gatesJ = json_object_get(rootJ, "notes");
                     if(!gatesJ || json_array_size(gatesJ) != 12 * NUM_SCALES) {
+#ifdef USING_CARDINAL_NOT_RACK
+                        async_dialog_message("rewin: invalid input file");
+#else
                         osdialog_message(OSDIALOG_ERROR, OSDIALOG_OK, "rewin: invalid input file");
+#endif
                         return;
                     }
                     module->dataFromJson(rootJ);
                 }
                 else {
+#ifdef USING_CARDINAL_NOT_RACK
+                    async_dialog_message("rewin: can't load file - see logfile for details");
+#else
                     osdialog_message(OSDIALOG_ERROR, OSDIALOG_OK, "rewin: can't load file - see logfile for details");
+#endif
                     DEBUG("Error: Can't import file %s", path);
                     DEBUG("Text: %s", error.text);
                     DEBUG("Source: %s", error.source);
