@@ -1,5 +1,9 @@
 # ChangeLog for repelzen modules
 
+## 2.0.0 release
+
+migration to VCV Rack version 2, with thanks to Steve Russell
+
 ## 1.1.0 release
 
 tag beta2 as release, since no new issues were reported
