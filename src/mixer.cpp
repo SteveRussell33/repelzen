@@ -148,7 +148,7 @@ void Mixer::process(const ProcessArgs &args) {
     	    lights[MUTE_LIGHT + i].value =  (channels[i].mute) ? 1.0f : 0.0f;
     	}
 
-        if(!channels[i].mute) {
+        if(!channels[i].mute && inputs[CH1_INPUT + i].isConnected()) {
             float gain = pow(10, params[GAIN_PARAM + i].getValue()/20.0f);
             gain *= inputs[CH1_GAIN_INPUT + i].getNormalVoltage(10.0f) / 10.0f;
 
