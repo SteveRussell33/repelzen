@@ -51,13 +51,15 @@ struct Erwin : Module {
         configInput(SELECT_INPUT, "scene selection");
         configInput(TRANSPOSE_INPUT, "transposition");
         configInput(SEMI_INPUT, "semi");
-        onReset();
+        Init();
     }
 
     void process(const ProcessArgs &args) override;
     json_t* dataToJson() override;
     void dataFromJson(json_t *rootJ) override;
     void onReset() override;
+
+    void Init() { for (int i = 0; i < 12 * NUM_SCALES; i++) noteState[i] = false; }
 
     int mode = 0;
     bool noteState[12 * NUM_SCALES] = {};
@@ -104,69 +106,70 @@ void Erwin::dataFromJson(json_t *rootJ) {
     }
 }
 
-void Erwin::onReset() {
-    for (int i = 0; i < 12 * NUM_SCALES; i++) noteState[i] = 0;
-}
+void Erwin::onReset() { Init(); }
 
 void Erwin::process(const ProcessArgs &args) {
 
     // Scale selection
     int scaleOffset = clamp((int)(params[SELECT_PARAM].getValue()
-        + inputs[SELECT_INPUT].getVoltage() * NUM_SCALES /10),0,15) * 12;
+        + inputs[SELECT_INPUT].getVoltage() * NUM_SCALES /10), 0, 15) * 12;
     bool* currentScale = noteState + scaleOffset;
 
     // limit to 1 octave
     transposeSemi = (int)round(inputs[SEMI_INPUT].getVoltage() * 1.2);
 
-    for(unsigned int y=0; y<NUM_CHANNELS; y++) {
+    for(unsigned int y = 0; y < NUM_CHANNELS; y++) {
         // normalize to first channel
         if(!inputs[IN_INPUT + y].isConnected()) {
             inputs[IN_INPUT + y].setVoltage(inputs[IN_INPUT].getVoltage(), 0);
         }
 
-        octave = trunc(inputs[IN_INPUT+y].getVoltage());
-        freq = inputs[IN_INPUT+y].getVoltage() - octave;
-        // limit to 4 octaves
-        transposeOctave = clamp((int)round(inputs[TRANSPOSE_INPUT].getVoltage() / 2.5)
-            + (int)round(params[CHANNEL_TRANSPOSE_PARAM + y].getValue()),-4, 4);
+        int currentPolyphony = std::max(1, inputs[IN_INPUT + y].getChannels());
+        outputs[OUT_OUTPUT + y].setChannels(currentPolyphony);
 
-        // index of the quantized note
-        int index = 0;
+        for (int c = 0; c < currentPolyphony; c++) {
+            octave = trunc(inputs[IN_INPUT+y].getPolyVoltage(c));
+            freq = inputs[IN_INPUT+y].getPolyVoltage(c) - octave;
+            // limit to 4 octaves
+            transposeOctave = clamp((int)round(inputs[TRANSPOSE_INPUT].getPolyVoltage(c) / 2.5)
+                + (int)round(params[CHANNEL_TRANSPOSE_PARAM + y].getValue()), -4, 4);
 
-        int semiUp = ceilN(freq * 12);
-        int semiDown = (int)trunc(freq * 12);
-        uint8_t stepsUp = 0;
-        uint8_t stepsDown = 0;
+            // index of the quantized note
+            int index = 0;
 
-        while(!currentScale[modN(semiUp + stepsUp,12)] && stepsUp < 12)
-        stepsUp++;
-        while(!currentScale[modN(semiDown - stepsDown, 12)] && stepsDown < 12)
-        stepsDown++;
+            int semiUp = ceilN(freq * 12);
+            int semiDown = (int)trunc(freq * 12);
+            uint8_t stepsUp = 0;
+            uint8_t stepsDown = 0;
 
-        // Reset for empty scales to avoid transposing by 1 octave
-        stepsUp %= 12;
-        stepsDown %= 12;
+            while(!currentScale[modN(semiUp + stepsUp,12)] && stepsUp < 12)
+            stepsUp++;
+            while(!currentScale[modN(semiDown - stepsDown, 12)] && stepsDown < 12)
+            stepsDown++;
 
-        switch(mode) {
-        case QModes::UP:
-            index = semiUp + stepsUp;
-            break;
-        case QModes::DOWN:
-            index = semiDown - stepsDown;
-            break;
-        case QModes::NEAREST:
-            if (stepsUp < stepsDown)
-            index = semiUp + stepsUp;
-            else
-            index = semiDown - stepsDown;
-            break;
+            // Reset for empty scales to avoid transposing by 1 octave
+            stepsUp %= 12;
+            stepsDown %= 12;
+
+            switch(mode) {
+                case QModes::UP:
+                    index = semiUp + stepsUp;
+                    break;
+                case QModes::DOWN:
+                    index = semiDown - stepsDown;
+                    break;
+                case QModes::NEAREST:
+                    if (stepsUp < stepsDown)
+                        index = semiUp + stepsUp;
+                    else
+                        index = semiDown - stepsDown;
+                    break;
+            }
+
+            if(transposeSemi) index += transposeSemi;
+
+            outputs[OUT_OUTPUT + y].setVoltage(octave + index * 1/12.0 + transposeOctave, c);
         }
-
-        if(transposeSemi)
-        index += transposeSemi;
-
-        outputs[OUT_OUTPUT + y].setVoltage(octave + index * 1/12.0 + transposeOctave);
-
     }
 
     // Note buttons
@@ -176,11 +179,10 @@ void Erwin::process(const ProcessArgs &args) {
         }
         lights[NOTE_LIGHT + i].value = (currentScale[i] >= 1.0) ? 0.7 : 0;
     }
-
 }
 
 struct ErwinWidget : ModuleWidget {
-    ErwinWidget(Erwin *module) {
+    explicit ErwinWidget(Erwin *module) {
         setModule(module);
         box.size = Vec(8 * RACK_GRID_WIDTH, RACK_GRID_HEIGHT);
         setPanel(createPanel(asset::plugin(pluginInstance, "res/reface/rewin_bg.svg")));
@@ -255,65 +257,36 @@ struct ErwinWidget : ModuleWidget {
         void onAction(const event::Action &e) override {
             json_t* rootJ = module->dataToJson();
             if(rootJ) {
-#ifdef USING_CARDINAL_NOT_RACK
-                async_dialog_filebrowser(true, nullptr, "Save scales", [rootJ](char* path) {
-                    pathSelected(rootJ, path);
-                });
-#else
                 char* path = osdialog_file(OSDIALOG_SAVE, NULL, "rewin.json", NULL);
-                pathSelected(rootJ, path);
-#endif
+                if(path) {
+                    if (json_dump_file(rootJ, path, 0))
+                    DEBUG("Error: cannot export rewin scale file");
+                }
+                free(path);
             }
-        }
-
-        static void pathSelected(json_t* rootJ, char* path) {
-            if(path) {
-                if (json_dump_file(rootJ, path, 0))
-                DEBUG("Error: cannot export rewin scale file");
-            }
-            free(path);
         }
     };
 
     /* Import scales */
     struct ErwinLoadItem : MenuItem {
         Erwin *module;
+        json_error_t error;
 
         void onAction(const event::Action &e) override {
-#ifdef USING_CARDINAL_NOT_RACK
-            Erwin* module = this->module;
-            async_dialog_filebrowser(false, nullptr, "Load scales", [module](char* path) {
-                pathSelected(module, path);
-            });
-#else
             char* path = osdialog_file(OSDIALOG_OPEN, NULL, NULL, NULL);
-            pathSelected(module, path);
-#endif
-        }
-
-        static void pathSelected(Erwin* module, char* path) {
             if(path) {
-                json_error_t error;
                 json_t* rootJ = json_load_file(path, 0, &error);
                 if(rootJ) {
                     // Check this here to not break compatibility with old (single scale) saves
                     json_t *gatesJ = json_object_get(rootJ, "notes");
                     if(!gatesJ || json_array_size(gatesJ) != 12 * NUM_SCALES) {
-#ifdef USING_CARDINAL_NOT_RACK
-                        async_dialog_message("rewin: invalid input file");
-#else
                         osdialog_message(OSDIALOG_ERROR, OSDIALOG_OK, "rewin: invalid input file");
-#endif
                         return;
                     }
                     module->dataFromJson(rootJ);
                 }
                 else {
-#ifdef USING_CARDINAL_NOT_RACK
-                    async_dialog_message("rewin: can't load file - see logfile for details");
-#else
                     osdialog_message(OSDIALOG_ERROR, OSDIALOG_OK, "rewin: can't load file - see logfile for details");
-#endif
                     DEBUG("Error: Can't import file %s", path);
                     DEBUG("Text: %s", error.text);
                     DEBUG("Source: %s", error.source);
