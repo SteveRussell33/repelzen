@@ -139,7 +139,7 @@ void Mixer::process(const ProcessArgs &args) {
     float aux2LIn = inputs[AUX2_L_INPUT].getNormalVoltage(0.0f);
     float aux2RIn = inputs[AUX2_R_INPUT].getNormalVoltage(0.0f);
 
-    for(int i=0;i<NUM_CHANNELS;i++) {
+    for(int i = 0; i < NUM_CHANNELS; i++) {
         // sum polyphonic cables, as per vcv voltage standards, #5
     	float in = inputs[CH1_INPUT + i].getVoltageSum();
 
@@ -234,7 +234,7 @@ void Mixer::process(const ProcessArgs &args) {
 }
 
 struct MixerWidget : ModuleWidget {
-    MixerWidget(Mixer *module) {
+    explicit MixerWidget(Mixer *module) {
         setModule(module);
         box.size = Vec(28 * RACK_GRID_WIDTH, RACK_GRID_HEIGHT);
         setPanel(createPanel(asset::plugin(pluginInstance, "res/reface/rexmix_bg.svg")));
