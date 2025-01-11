@@ -51,7 +51,6 @@ struct Erwin : Module {
         configInput(SELECT_INPUT, "scene selection");
         configInput(TRANSPOSE_INPUT, "transposition");
         configInput(SEMI_INPUT, "semi");
-        Init();
     }
 
     void process(const ProcessArgs &args) override;
@@ -59,15 +58,12 @@ struct Erwin : Module {
     void dataFromJson(json_t *rootJ) override;
     void onReset() override;
 
-    void Init() { for (int i = 0; i < 12 * NUM_SCALES; i++) noteState[i] = false; }
-
     int mode = 0;
     bool noteState[12 * NUM_SCALES] = {};
     int octave = 0;
     int transposeOctave = 0;
     int transposeSemi = 0;
     float freq = 0.0f;
-
     dsp::SchmittTrigger noteTriggers[12];
 };
 
@@ -106,7 +102,9 @@ void Erwin::dataFromJson(json_t *rootJ) {
     }
 }
 
-void Erwin::onReset() { Init(); }
+void Erwin::onReset() { 
+    for (int i = 0; i < 12 * NUM_SCALES; i++) noteState[i] = false; 
+}
 
 void Erwin::process(const ProcessArgs &args) {
 
