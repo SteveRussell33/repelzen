@@ -2,30 +2,31 @@
 #include "osdialog.h"
 #include <math.h>
 
-#define NUM_CHANNELS 4
-#define NUM_SCALES 16
+static constexpr const int NUM_CHANNELS = 4;
+static constexpr const int NUM_SCALES = 16;
+static constexpr const int NUM_NOTES = 12;
 
 struct Erwin : Module {
     enum ParamIds {
         CHANNEL_TRANSPOSE_PARAM,
         NOTE_PARAM = CHANNEL_TRANSPOSE_PARAM + NUM_CHANNELS,
-        SELECT_PARAM = NOTE_PARAM + 12,
+        SELECT_PARAM = NOTE_PARAM + NUM_NOTES,
         NUM_PARAMS
     };
     enum InputIds {
         TRANSPOSE_INPUT,
         SEMI_INPUT,
         IN_INPUT,
-        SELECT_INPUT = IN_INPUT + 4,
+        SELECT_INPUT = IN_INPUT + NUM_CHANNELS,
         NUM_INPUTS
     };
     enum OutputIds {
         OUT_OUTPUT,
-        NUM_OUTPUTS = OUT_OUTPUT + 4
+        NUM_OUTPUTS = OUT_OUTPUT + NUM_CHANNELS
     };
     enum LightIds {
         NOTE_LIGHT,
-        NUM_LIGHTS = NOTE_LIGHT + 12
+        NUM_LIGHTS = NOTE_LIGHT + NUM_NOTES
     };
 
     enum QModes {
@@ -41,10 +42,10 @@ struct Erwin : Module {
         configParam(Erwin::CHANNEL_TRANSPOSE_PARAM + 2, -4, 4, 0, "octave");
         configParam(Erwin::CHANNEL_TRANSPOSE_PARAM + 3, -4, 4, 0, "octave");
         configParam(Erwin::SELECT_PARAM, 0, 15, 0, "scene", "", 0, 1, 1);
-        for (int i = 0; i < 12; i++) {
+        for (int i = 0; i < NUM_NOTES; i++) {
             configParam(Erwin::NOTE_PARAM + i, 0.0, 1.0, 0.0, "enable/disable note");
         }
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < NUM_CHANNELS; i++) {
             configInput(IN_INPUT + i, string::f("channel %i", i + 1));
             configOutput(OUT_OUTPUT + i, string::f("channel %i", i + 1));
         }
@@ -59,12 +60,12 @@ struct Erwin : Module {
     void onReset() override;
 
     int mode = 0;
-    bool noteState[12 * NUM_SCALES] = {};
+    bool noteState[NUM_NOTES * NUM_SCALES] = {};
     int octave = 0;
     int transposeOctave = 0;
     int transposeSemi = 0;
     float freq = 0.0f;
-    dsp::SchmittTrigger noteTriggers[12];
+    dsp::SchmittTrigger noteTriggers[NUM_NOTES];
 };
 
 json_t* Erwin::dataToJson() {
@@ -72,7 +73,7 @@ json_t* Erwin::dataToJson() {
 
     // Note values
     json_t *gatesJ = json_array();
-    for (int i = 0; i < 12 * NUM_SCALES; i++) {
+    for (int i = 0; i < NUM_NOTES * NUM_SCALES; i++) {
         json_t *gateJ = json_boolean(noteState[i]);
         json_array_append_new(gatesJ, gateJ);
     }
@@ -103,14 +104,14 @@ void Erwin::dataFromJson(json_t *rootJ) {
 }
 
 void Erwin::onReset() { 
-    for (int i = 0; i < 12 * NUM_SCALES; i++) noteState[i] = false; 
+    for (int i = 0; i < NUM_NOTES * NUM_SCALES; i++) noteState[i] = false; 
 }
 
 void Erwin::process(const ProcessArgs &args) {
 
     // Scale selection
     int scaleOffset = clamp((int)(params[SELECT_PARAM].getValue()
-        + inputs[SELECT_INPUT].getVoltage() * NUM_SCALES /10), 0, 15) * 12;
+        + inputs[SELECT_INPUT].getVoltage() * NUM_SCALES / 10), 0, 15) * 12;
     bool* currentScale = noteState + scaleOffset;
 
     // limit to 1 octave
@@ -140,7 +141,7 @@ void Erwin::process(const ProcessArgs &args) {
             uint8_t stepsUp = 0;
             uint8_t stepsDown = 0;
 
-            while(!currentScale[modN(semiUp + stepsUp,12)] && stepsUp < 12)
+            while(!currentScale[modN(semiUp + stepsUp, 12)] && stepsUp < 12)
             stepsUp++;
             while(!currentScale[modN(semiDown - stepsDown, 12)] && stepsDown < 12)
             stepsDown++;
@@ -171,7 +172,7 @@ void Erwin::process(const ProcessArgs &args) {
     }
 
     // Note buttons
-    for (int i = 0; i < 12; i++) {
+    for (int i = 0; i < NUM_NOTES; i++) {
         if (noteTriggers[i].process(params[NOTE_PARAM + i].getValue())) {
             currentScale[i] = !currentScale[i];
         }
@@ -193,9 +194,9 @@ struct ErwinWidget : ModuleWidget {
         addInput(createInput<ReIOPort>(Vec(85.75, 108.75), module, Erwin::TRANSPOSE_INPUT));
         addInput(createInput<ReIOPort>(Vec(48.25, 108.75), module, Erwin::SEMI_INPUT));
 
-        for(int i=0;i<NUM_CHANNELS;i++) {
-            addOutput(createOutput<ReIOPort>(Vec(92.75, 198.75 + i*42), module, Erwin::OUT_OUTPUT + i));
-            addInput(createInput<ReIOPort>(Vec(62.75, 198.75 + i*42), module, Erwin::IN_INPUT + i));
+        for(int i = 0; i < NUM_CHANNELS; i++) {
+            addOutput(createOutput<ReIOPort>(Vec(92.75, 198.75 + i * 42), module, Erwin::OUT_OUTPUT + i));
+            addInput(createInput<ReIOPort>(Vec(62.75, 198.75 + i * 42), module, Erwin::IN_INPUT + i));
         }
 
         addParam(createParam<ReSnapKnobSRed>(Vec(80, 181), module, Erwin::CHANNEL_TRANSPOSE_PARAM));
@@ -204,19 +205,18 @@ struct ErwinWidget : ModuleWidget {
         addParam(createParam<ReSnapKnobSBlue>(Vec(80, 308), module, Erwin::CHANNEL_TRANSPOSE_PARAM + 3));
 
         /* note buttons */
-        int white=0;
-        int black = 0;
-        for(int i=0; i<12; i++) {
+        int white = 0, black = 0;
+        for(int i = 0; i < NUM_NOTES; i++) {
             if (i == 1 || i == 3 || i == 6 || i == 8 || i == 10 ) {
-                addParam(createParam<ReButtonM>(Vec(8, 312 - black*28), module, Erwin::NOTE_PARAM + i));
-                addChild(createLight<ReLightM<ReBlueLight>>(Vec(10, 314 - black*28), module, Erwin::NOTE_LIGHT + i));
+                addParam(createParam<ReButtonM>(Vec(8, 312 - black * 28), module, Erwin::NOTE_PARAM + i));
+                addChild(createLight<ReLightM<ReBlueLight>>(Vec(10, 314 - black * 28), module, Erwin::NOTE_LIGHT + i));
                 black++;
             }
             else {
                 if(i == 4)
                 black++;
-                addParam(createParam<ReButtonM>(Vec(33, 326 - white*28), module, Erwin::NOTE_PARAM + i));
-                addChild(createLight<ReLightM<ReBlueLight>>(Vec(35, 328 - white*28), module, Erwin::NOTE_LIGHT + i));
+                addParam(createParam<ReButtonM>(Vec(33, 326 - white * 28), module, Erwin::NOTE_PARAM + i));
+                addChild(createLight<ReLightM<ReBlueLight>>(Vec(35, 328 - white * 28), module, Erwin::NOTE_LIGHT + i));
                 white++;
             }
         }
